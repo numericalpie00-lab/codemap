@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CodeMap</title>
+<style>
+  :root {
+    --bg: #0e1320; --bg2: #0b0f1a; --panel: #151b2b; --panel2: #1b2334;
+    --line: #26314a; --text: #cdd8ee; --muted: #7e8bab; --dim: #4a5876;
+    --accent: #ffb454;      /* "you are here" */
+    --edge: #2c3852;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", "PingFang SC", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--sans); }
+  #app { display: grid; grid-template-columns: 1fr 320px; height: 100vh; }
+  canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+  canvas.grabbing { cursor: grabbing; }
+
+  /* top-left HUD */
+  .hud { position: fixed; top: 14px; left: 16px; z-index: 5; pointer-events: none; }
+  .hud .title { font-weight: 800; font-size: 15px; letter-spacing: .02em; }
+  .hud .title .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--dim); margin-left: 8px; vertical-align: middle; transition: background .2s, box-shadow .2s; }
+  .hud .title .dot.live { background: var(--accent); box-shadow: 0 0 0 4px rgba(255,180,84,.18); }
+  .hud .sub { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+  /* sidebar */
+  .side { background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+  .side section { border-bottom: 1px solid var(--line); }
+  .side h2 { font-family: var(--mono); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0; padding: 12px 14px 8px; }
+  .search { padding: 10px 12px; }
+  .search input { width: 100%; background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; color: var(--text); font: inherit; font-size: 13px; padding: 7px 10px; outline: none; }
+  .search input:focus { border-color: var(--accent); }
+
+  .timeline { flex: 1 1 auto; overflow-y: auto; min-height: 80px; }
+  .tl-item { display: flex; gap: 9px; align-items: baseline; padding: 6px 14px; cursor: pointer; border-left: 2px solid transparent; }
+  .tl-item:hover { background: var(--panel2); }
+  .tl-item.top { border-left-color: var(--accent); }
+  .tl-item .name { font-family: var(--mono); font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tl-item .path { font-size: 10px; color: var(--dim); }
+  .tl-item .ago { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--muted); white-space: nowrap; }
+  .tl-empty { color: var(--dim); font-size: 12px; padding: 4px 14px 14px; line-height: 1.6; }
+
+  .legend { max-height: 26vh; overflow-y: auto; padding: 4px 14px 12px; }
+  .legend .row { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 3px 0; cursor: pointer; color: var(--muted); }
+  .legend .row:hover { color: var(--text); }
+  .legend .sw { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .legend .row .ct { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--dim); }
+
+  /* detail popover */
+  .detail { position: fixed; z-index: 6; bottom: 16px; left: 16px; width: 380px; max-width: calc(100vw - 360px);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; box-shadow: 0 20px 50px -20px rgba(0,0,0,.8); display: none; }
+  .detail.show { display: block; }
+  .detail .fp { font-family: var(--mono); font-size: 13px; font-weight: 700; word-break: break-all; }
+  .detail .meta { font-family: var(--mono); font-size: 11px; color: var(--muted); margin: 4px 0 10px; }
+  .detail .grp { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .detail .grp h3 { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); margin: 0 0 4px; }
+  .detail .grp ul { margin: 0; padding: 0; list-style: none; max-height: 120px; overflow-y: auto; }
+  .detail .grp li { font-family: var(--mono); font-size: 11.5px; color: var(--text); padding: 1px 0; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .detail .grp li:hover { color: var(--accent); }
+  .detail .grp .none { color: var(--dim); font-size: 11px; }
+  .detail .close { position: absolute; top: 10px; right: 12px; cursor: pointer; color: var(--muted); font-size: 16px; line-height: 1; }
+  .detail .close:hover { color: var(--text); }
+
+  .hint { position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); font-family: var(--mono); font-size: 10.5px; color: var(--dim); pointer-events: none; }
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 6px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div style="position:relative;min-width:0">
+    <canvas id="cv"></canvas>
+    <div class="hud">
+      <div class="title">🗺 CodeMap<span class="dot" id="livedot"></span></div>
+      <div class="sub" id="subtitle">loading…</div>
+    </div>
+    <div class="hint">拖拽平移 · 滚轮缩放 · 点击气泡查看 · 拖动气泡钉住</div>
+  </div>
+  <aside class="side">
+    <section class="search"><input id="q" placeholder="搜索文件…" autocomplete="off" /></section>
+    <section style="display:flex;flex-direction:column;min-height:0;flex:1">
+      <h2>本次会话动过 · You are here</h2>
+      <div class="timeline" id="timeline"></div>
+    </section>
+    <section>
+      <h2>业务领域 · Domains</h2>
+      <div class="legend" id="legend"></div>
+    </section>
+  </aside>
+</div>
+
+<div class="detail" id="detail">
+  <span class="close" id="detailClose">✕</span>
+  <div class="fp" id="dFp"></div>
+  <div class="meta" id="dMeta"></div>
+  <div class="grp">
+    <div><h3>依赖 → imports</h3><ul id="dOut"></ul></div>
+    <div><h3>被依赖 ← imported by</h3><ul id="dIn"></ul></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+function resize() {
+  const r = cv.getBoundingClientRect();
+  W = r.width; H = r.height;
+  cv.width = W * DPR; cv.height = H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize); resize();
+
+// ---------- state ----------
+const N = new Map();          // id -> {id,label,domain,...,x,y,vx,vy,pinned}
+let E = [];                   // {source,target}
+let activity = [];
+let domains = [];             // [{name,color,count,anchor:{x,y},hidden}]
+const domainColor = new Map();
+const PALETTE = ['#6aa9ff','#57c98a','#ffb454','#e06c9f','#a988e0','#4fc7c7','#d98c5f','#8fb14e','#c76bd0','#5f9ea0','#cf8a4a','#7aa0c9'];
+let view = { x: 0, y: 0, s: 1, ready: false };
+let hoverId = null, selId = null, focusId = null, filter = '';
+const ACTIVE_MS = 9000;       // node stays "hot" this long after a change
+
+const now = () => Date.now();
+function colorFor(dom) {
+  if (!domainColor.has(dom)) domainColor.set(dom, PALETTE[domainColor.size % PALETTE.length]);
+  return domainColor.get(dom);
+}
+function radiusFor(n) { return 4 + Math.min(16, Math.sqrt((n.loc || 1)) * 0.7); }
+
+// ---------- data sync ----------
+async function poll() {
+  try {
+    const r = await fetch('/api/state', { cache: 'no-store' });
+    const s = await r.json();
+    ingest(s);
+  } catch (e) { /* server not up yet */ }
+  setTimeout(poll, 1000);
+}
+let grouping = 'folder';
+function ingest(s) {
+  grouping = s.grouping || 'folder';
+  const mode = grouping === 'llm' ? '语义分组' : (s.provider ? '归类中…' : '文件夹分组');
+  document.getElementById('subtitle').textContent =
+    `${s.repo}  ·  ${s.nodes.length} files · ${s.edges.length} deps · ${mode}`;
+  // domains
+  const domCount = {};
+  for (const n of s.nodes) domCount[n.domain] = (domCount[n.domain] || 0) + 1;
+  const prevHidden = new Set(domains.filter(d => d.hidden).map(d => d.name));
+  domains = Object.keys(domCount).sort().map((name) => ({
+    name, color: colorFor(name), count: domCount[name], hidden: prevHidden.has(name),
+  }));
+  layoutAnchors();
+  // nodes (preserve positions)
+  const keep = new Set();
+  for (const n of s.nodes) {
+    keep.add(n.id);
+    const ex = N.get(n.id);
+    if (ex) { Object.assign(ex, n); }
+    else {
+      const a = anchorOf(n.domain);
+      N.set(n.id, { ...n, x: a.x + (Math.random() - .5) * 120, y: a.y + (Math.random() - .5) * 120, vx: 0, vy: 0, pinned: false });
+    }
+  }
+  for (const id of [...N.keys()]) if (!keep.has(id)) N.delete(id);
+  E = s.edges.filter(e => N.has(e.source) && N.has(e.target));
+  activity = s.activity || [];
+  heat = 1; // re-energize layout when data changes
+  renderSidebar();
+  updateLiveDot();
+  if (!view.ready) { fitView(); view.ready = true; }
+}
+
+function layoutAnchors() {
+  const R = Math.max(260, 120 + domains.length * 48);
+  domains.forEach((d, i) => {
+    const ang = (i / Math.max(1, domains.length)) * Math.PI * 2 - Math.PI / 2;
+    d.anchor = { x: Math.cos(ang) * R, y: Math.sin(ang) * R };
+  });
+}
+function anchorOf(dom) { const d = domains.find(x => x.name === dom); return d ? d.anchor : { x: 0, y: 0 }; }
+function isHidden(dom) { const d = domains.find(x => x.name === dom); return d && d.hidden; }
+
+// ---------- force layout ----------
+let heat = 1;
+function step() {
+  const arr = [...N.values()].filter(n => !isHidden(n.domain));
+  const k = heat;
+  // repulsion (O(n^2), fine for prototype scale)
+  for (let i = 0; i < arr.length; i++) {
+    const a = arr[i];
+    for (let j = i + 1; j < arr.length; j++) {
+      const b = arr[j];
+      let dx = a.x - b.x, dy = a.y - b.y;
+      let d2 = dx * dx + dy * dy || 0.01;
+      if (d2 > 90000) continue;
+      const f = 1400 / d2;
+      const d = Math.sqrt(d2);
+      const fx = (dx / d) * f, fy = (dy / d) * f;
+      a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
+    }
+  }
+  // edge springs
+  for (const e of E) {
+    const a = N.get(e.source), b = N.get(e.target);
+    if (!a || !b || isHidden(a.domain) || isHidden(b.domain)) continue;
+    let dx = b.x - a.x, dy = b.y - a.y;
+    const d = Math.sqrt(dx * dx + dy * dy) || 0.01;
+    const f = (d - 70) * 0.007;
+    const fx = (dx / d) * f, fy = (dy / d) * f;
+    a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
+  }
+  // domain gravity + integrate — strong pull so same-domain files cluster tightly
+  for (const n of arr) {
+    const a = anchorOf(n.domain);
+    n.vx += (a.x - n.x) * 0.05;
+    n.vy += (a.y - n.y) * 0.05;
+    if (n === dragNode) continue;
+    n.vx *= 0.85; n.vy *= 0.85;
+    if (!n.pinned) { n.x += n.vx * k; n.y += n.vy * k; }
+  }
+  heat = Math.max(0.15, heat * 0.992);
+}
+
+// ---------- rendering ----------
+function draw() {
+  step();
+  ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  ctx.translate(view.x, view.y); ctx.scale(view.s, view.s);
+  const t = now();
+  const neighbors = new Set();
+  const focus = hoverId || selId;
+  if (focus) { neighbors.add(focus); for (const e of E) { if (e.source === focus) neighbors.add(e.target); if (e.target === focus) neighbors.add(e.source); } }
+
+  // ---- cluster bubbles: group same-domain nodes into a soft translucent blob ----
+  const groups = {};
+  for (const n of N.values()) {
+    if (isHidden(n.domain)) continue;
+    (groups[n.domain] || (groups[n.domain] = [])).push(n);
+  }
+  const clusters = [];
+  for (const dom in groups) {
+    const g = groups[dom];
+    let cx = 0, cy = 0;
+    for (const n of g) { cx += n.x; cy += n.y; }
+    cx /= g.length; cy /= g.length;
+    let R = 44;
+    for (const n of g) R = Math.max(R, Math.hypot(n.x - cx, n.y - cy) + radiusFor(n));
+    R += 26;
+    clusters.push({ dom, cx, cy, R, count: g.length });
+    ctx.globalAlpha = focus ? 0.03 : 0.07;
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.fillStyle = colorFor(dom); ctx.fill();
+    ctx.globalAlpha = focus ? 0.12 : 0.28;
+    ctx.lineWidth = 1.5 / view.s; ctx.strokeStyle = colorFor(dom); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  // edges
+  ctx.lineWidth = 1 / view.s;
+  for (const e of E) {
+    const a = N.get(e.source), b = N.get(e.target);
+    if (!a || !b || isHidden(a.domain) || isHidden(b.domain)) continue;
+    const hot = focus && (e.source === focus || e.target === focus);
+    ctx.strokeStyle = hot ? 'rgba(255,180,84,.5)' : (focus ? 'rgba(44,56,82,.35)' : 'rgba(44,56,82,.7)');
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  }
+  // nodes
+  for (const n of N.values()) {
+    if (isHidden(n.domain)) continue;
+    const r = radiusFor(n);
+    const age = t - (n.lastChanged || 0);
+    const active = age < ACTIVE_MS;
+    const matchFilter = filter && n.label.toLowerCase().includes(filter);
+    const dimmed = (focus && !neighbors.has(n.id)) || (filter && !matchFilter);
+    ctx.globalAlpha = dimmed ? 0.18 : 1;
+
+    // active glow
+    if (active) {
+      const p = 1 - age / ACTIVE_MS;
+      const pulse = 0.5 + 0.5 * Math.sin(t / 220);
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, r + 6 + pulse * 5, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,180,84,${0.10 + 0.18 * p})`;
+      ctx.fill();
+    }
+    ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = colorFor(n.domain);
+    ctx.fill();
+    if (active || n.id === selId || matchFilter) {
+      ctx.lineWidth = 2 / view.s; ctx.strokeStyle = active ? '#ffb454' : '#cdd8ee'; ctx.stroke();
+    }
+    // labels
+    const showLabel = view.s > 0.7 || active || n.id === hoverId || n.id === selId || matchFilter;
+    if (showLabel) {
+      ctx.globalAlpha = dimmed ? 0.3 : 1;
+      ctx.fillStyle = active ? '#ffd9a0' : '#aeb9d6';
+      ctx.font = `${11 / view.s}px ui-monospace, monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText(n.label, n.x, n.y + r + 12 / view.s);
+    }
+  }
+  // ---- domain labels: big, crisp Chinese business-domain names above each cluster ----
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  for (const c of clusters) {
+    if (focus && !neighbors.has(c.dom)) { /* keep labels; focus dims by node only */ }
+    ctx.globalAlpha = focus ? 0.55 : 0.95;
+    // subtle dark backing so the label reads over bubbles/edges
+    ctx.font = `800 ${15 / view.s}px var(--sans), system-ui`;
+    const label = c.dom;
+    const lw = ctx.measureText(label).width;
+    const ly = c.cy - c.R - 9 / view.s;
+    ctx.globalAlpha = focus ? 0.4 : 0.7;
+    ctx.fillStyle = 'rgba(11,15,26,.72)';
+    const padX = 7 / view.s, padY = 5 / view.s, bh = 20 / view.s;
+    roundRect(ctx, c.cx - lw / 2 - padX, ly - bh + padY, lw + padX * 2, bh, 6 / view.s);
+    ctx.fill();
+    ctx.globalAlpha = focus ? 0.6 : 1;
+    ctx.fillStyle = colorFor(c.dom);
+    ctx.fillText(label, c.cx, ly);
+  }
+  ctx.globalAlpha = 1;
+
+  // "you are here" marker on the most recent change
+  const latest = activity[0] && N.get(activity[0].path);
+  if (latest && now() - (latest.lastChanged || 0) < ACTIVE_MS && !isHidden(latest.domain)) {
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#ffb454';
+    ctx.font = `bold ${12 / view.s}px system-ui`;
+    ctx.textAlign = 'center';
+    ctx.fillText('◆ 你在这里', latest.x, latest.y - radiusFor(latest) - 10 / view.s);
+  }
+  ctx.restore();
+  requestAnimationFrame(draw);
+}
+
+// ---------- interaction ----------
+function toWorld(sx, sy) { return { x: (sx - view.x) / view.s, y: (sy - view.y) / view.s }; }
+function nodeAt(sx, sy) {
+  const w = toWorld(sx, sy); let best = null, bd = 1e9;
+  for (const n of N.values()) {
+    if (isHidden(n.domain)) continue;
+    const r = radiusFor(n) + 4;
+    const dx = n.x - w.x, dy = n.y - w.y, d = dx * dx + dy * dy;
+    if (d < r * r && d < bd) { bd = d; best = n; }
+  }
+  return best;
+}
+let dragNode = null, panning = false, last = null, downPos = null;
+cv.addEventListener('pointerdown', (e) => {
+  downPos = { x: e.clientX, y: e.clientY };
+  const n = nodeAt(e.offsetX, e.offsetY);
+  if (n) { dragNode = n; n.pinned = true; }
+  else { panning = true; cv.classList.add('grabbing'); }
+  last = { x: e.clientX, y: e.clientY };
+  cv.setPointerCapture(e.pointerId);
+});
+cv.addEventListener('pointermove', (e) => {
+  if (dragNode) {
+    const w = toWorld(e.offsetX, e.offsetY); dragNode.x = w.x; dragNode.y = w.y; dragNode.vx = dragNode.vy = 0; heat = Math.max(heat, 0.5);
+  } else if (panning) {
+    view.x += e.clientX - last.x; view.y += e.clientY - last.y; last = { x: e.clientX, y: e.clientY };
+  } else {
+    const n = nodeAt(e.offsetX, e.offsetY); hoverId = n ? n.id : null; cv.style.cursor = n ? 'pointer' : 'grab';
+  }
+});
+cv.addEventListener('pointerup', (e) => {
+  const moved = downPos && (Math.abs(e.clientX - downPos.x) + Math.abs(e.clientY - downPos.y)) > 4;
+  if (dragNode && !moved) { dragNode.pinned = false; selectNode(dragNode.id); }
+  else if (!dragNode && !moved) { selectNode(null); }
+  dragNode = null; panning = false; cv.classList.remove('grabbing');
+});
+cv.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const f = Math.exp(-e.deltaY * 0.0015);
+  const wx = (e.offsetX - view.x) / view.s, wy = (e.offsetY - view.y) / view.s;
+  view.s = Math.max(0.15, Math.min(4, view.s * f));
+  view.x = e.offsetX - wx * view.s; view.y = e.offsetY - wy * view.s;
+}, { passive: false });
+
+function fitView() {
+  const arr = [...N.values()].filter(n => !isHidden(n.domain));
+  if (!arr.length) return;
+  let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+  for (const n of arr) { minX = Math.min(minX, n.x); minY = Math.min(minY, n.y); maxX = Math.max(maxX, n.x); maxY = Math.max(maxY, n.y); }
+  const pad = 80, gw = maxX - minX + pad * 2, gh = maxY - minY + pad * 2;
+  view.s = Math.max(0.2, Math.min(1.6, Math.min(W / gw, H / gh)));
+  view.x = W / 2 - (minX + maxX) / 2 * view.s;
+  view.y = H / 2 - (minY + maxY) / 2 * view.s;
+}
+
+// ---------- selection + detail ----------
+function selectNode(id) {
+  selId = id;
+  const d = document.getElementById('detail');
+  if (!id || !N.get(id)) { d.classList.remove('show'); return; }
+  const n = N.get(id);
+  document.getElementById('dFp').textContent = n.id;
+  const ago = n.lastChanged ? timeAgo(n.lastChanged) : '—';
+  document.getElementById('dMeta').textContent = `${n.domain}  ·  ${n.loc || 0} 行  ·  改动 ${ago}`;
+  const outs = E.filter(e => e.source === id).map(e => e.target);
+  const ins = E.filter(e => e.target === id).map(e => e.source);
+  fillList('dOut', outs); fillList('dIn', ins);
+  d.classList.add('show');
+}
+function fillList(elId, items) {
+  const ul = document.getElementById(elId);
+  ul.innerHTML = items.length ? '' : '<li class="none">—</li>';
+  for (const it of [...new Set(items)]) {
+    const li = document.createElement('li');
+    li.textContent = it; li.title = it;
+    li.onclick = () => { selectNode(it); focusOn(it); };
+    ul.appendChild(li);
+  }
+}
+document.getElementById('detailClose').onclick = () => { selId = null; document.getElementById('detail').classList.remove('show'); };
+
+function focusOn(id) {
+  const n = N.get(id); if (!n) return;
+  view.s = Math.max(view.s, 1.1);
+  view.x = W / 2 - n.x * view.s; view.y = H / 2 - n.y * view.s;
+}
+
+// ---------- sidebar ----------
+function renderSidebar() {
+  // timeline
+  const tl = document.getElementById('timeline');
+  if (!activity.length) { tl.innerHTML = '<div class="tl-empty">还没有改动。<br>用 Claude Code / 编辑器改一个文件,对应气泡会亮起,这里也会记一笔。</div>'; }
+  else {
+    tl.innerHTML = '';
+    activity.forEach((a, i) => {
+      const div = document.createElement('div');
+      div.className = 'tl-item' + (i === 0 ? ' top' : '');
+      div.innerHTML = `<span class="name">${esc(base(a.path))}</span><span class="ago">${timeAgo(a.ts)}</span>`;
+      div.title = a.path;
+      div.onclick = () => { selectNode(a.path); focusOn(a.path); };
+      tl.appendChild(div);
+    });
+  }
+  // legend
+  const lg = document.getElementById('legend'); lg.innerHTML = '';
+  for (const d of domains) {
+    const row = document.createElement('div'); row.className = 'row';
+    row.style.opacity = d.hidden ? .4 : 1;
+    row.innerHTML = `<span class="sw" style="background:${d.color}"></span><span>${esc(d.name)}</span><span class="ct">${d.count}</span>`;
+    row.onclick = () => { d.hidden = !d.hidden; heat = 1; renderSidebar(); };
+    lg.appendChild(row);
+  }
+}
+function updateLiveDot() {
+  const live = activity[0] && (now() - activity[0].ts < ACTIVE_MS);
+  document.getElementById('livedot').classList.toggle('live', !!live);
+}
+setInterval(() => { renderSidebar(); updateLiveDot(); }, 1000);
+
+document.getElementById('q').addEventListener('input', (e) => { filter = e.target.value.trim().toLowerCase(); });
+
+// ---------- utils ----------
+function roundRect(c, x, y, w, h, r) {
+  if (c.roundRect) { c.beginPath(); c.roundRect(x, y, w, h, r); return; }
+  c.beginPath();
+  c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
+}
+function base(p) { return p.split('/').pop(); }
+function esc(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
+function timeAgo(ts) {
+  const s = Math.max(0, (now() - ts) / 1000);
+  if (s < 5) return '刚刚'; if (s < 60) return `${s | 0}秒前`;
+  if (s < 3600) return `${(s / 60) | 0}分前`; if (s < 86400) return `${(s / 3600) | 0}时前`;
+  return `${(s / 86400) | 0}天前`;
+}
+
+poll();
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>

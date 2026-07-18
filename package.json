@@ -1,0 +1,11 @@
+{
+  "name": "codemap",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A live spatial map of your codebase — see the big picture and 'you are here' while vibe-coding.",
+  "bin": { "codemap": "server.mjs" },
+  "scripts": {
+    "start": "node server.mjs"
+  }
+}
