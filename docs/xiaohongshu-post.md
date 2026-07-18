@@ -44,3 +44,15 @@ GitHub：numericalpie00-lab/codemap
 ## 标签
 
 #vibecoding #开源项目 #ClaudeCode #Cursor #程序员日常 #独立开发 #AI编程 #可视化 #开源社区
+
+---
+
+## X posts（build in public，每条 ≤140 字符）
+
+1. Vibe coding confession: I shipped a whole project in 3 days, then opened the repo and didn't recognize my own code. So I built a fix 🗺️
+2. Meet CodeMap: a live spatial map of your codebase. Your AI edits a file → its node lights up on the map. You always know where you are 📍
+3. The chat log is linear. Your codebase isn't. CodeMap turns every AI edit into a glowing dot on a map + a session timeline. Second-screen it
+4. Fun part: an LLM groups files by what they DO, not what folder they're in. "auth", "canvas", "persistence" — a real system map, not a tree
+5. Stats so far: 0 dependencies, ~950 lines, one command to run (node server.mjs). No API key? Still works, just folder-based grouping
+6. Being honest: it's a rough v0. JS/TS only imports, 1s polling, no git awareness yet. MIT licensed — issues & PRs very welcome 🙏
+7. Next up: Conductor — the map drives the agent, not just watches it. Phased prompts, a verify gate after each phase. Spec done, code next
