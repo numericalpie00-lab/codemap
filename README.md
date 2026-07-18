@@ -15,7 +15,8 @@ CodeMap pointed at **its own repo** (5 files) — same UI, any size codebase:
 
 ![CodeMap running on its own repo](docs/codemap-self-en.png)
 
-The UI is bilingual. Default is Chinese; append `?lang=en` for English. Same map, **中文版**:
+The UI and the domain labels are bilingual. English is shown above; the same map with
+Chinese labels (`?lang=en` omitted, `CODEMAP_LANG` unset) looks like this:
 
 ![CodeMap with Chinese domain labels](docs/codemap.png)
 
@@ -29,17 +30,16 @@ node server.mjs /path/to/your/repo
 ```
 
 Options: `--port 7100`. If you omit the repo path it uses the current directory.
-The UI defaults to Chinese; open `http://localhost:7100/?lang=en` for English.
 
 Leave it open on a second monitor while you code. Edit a file → watch the node pulse.
 
-## 🧠 语义分组（LLM semantic grouping）
+## 🧠 Semantic grouping (LLM)
 
-By default files are grouped by **what they do** — intuitive Chinese business
-domains like 用户认证 / 画布渲染 / 数据持久化 — not by which folder they live in.
-An LLM reads each file's responsibility (top comment + exported symbols + path)
-and clusters same-domain files into labelled bubbles. Perfect when the code is in
-a language you don't read fluently: the *map* is in plain 中文.
+By default files are grouped by **what they do** — intuitive business domains like
+*User Auth*, *Canvas Rendering*, *Data Persistence* — not by which folder they live in.
+An LLM reads each file's responsibility (top comment + exported symbols + path) and
+clusters same-domain files into labelled bubbles. Great when the code is in a language
+you don't read fluently: the *map* reads in plain words.
 
 Turn it on by pointing CodeMap at a model (pick one):
 
@@ -54,9 +54,18 @@ LLM_BASE_URL=http://localhost:11434/v1 CODEMAP_MODEL=qwen2.5-coder node server.m
 OPENAI_API_KEY=sk-... CODEMAP_MODEL=gpt-4o-mini node server.mjs /path/to/repo
 ```
 
-Env vars: `ANTHROPIC_API_KEY`, `LLM_BASE_URL` (+ optional `OPENAI_API_KEY`),
-`CODEMAP_MODEL` (override the model). **No key set → it just uses folder grouping**,
-still fully usable.
+**No key set → it just uses folder grouping**, still fully usable.
+
+| Env var | Purpose |
+|---|---|
+| `ANTHROPIC_API_KEY` | Use Anthropic Claude (cheapest good option). |
+| `LLM_BASE_URL` (+ optional `OPENAI_API_KEY`) | Any OpenAI-compatible endpoint, including local models. |
+| `CODEMAP_MODEL` | Override the model name. |
+| `CODEMAP_LANG` | Domain-label language: unset/`zh` for Chinese (default), `en` for English. |
+
+**Language:** the interface language is per-browser (`?lang=en` in the URL); the
+domain-label language is set once at scan time via `CODEMAP_LANG`. For an all-English
+experience, run with `CODEMAP_LANG=en` and open `http://localhost:7100/?lang=en`.
 
 How it behaves: the map renders instantly with folder grouping, then **upgrades in
 place** to semantic domains a few seconds later (one batched call). Results cache to
@@ -66,24 +75,26 @@ only changed files get re-classified.
 ## What it does today (v0)
 
 - **Scans** the repo into a topology graph: files = nodes, `import`/`require` = edges,
-  grouped into **domains** — by responsibility via an LLM (中文 business domains), or by
-  folder as a fallback — and clustered into labelled bubbles on a force-directed map.
+  grouped into **domains** — by responsibility via an LLM, or by folder as a fallback —
+  and clustered into labelled bubbles on a force-directed map.
 - **Watches** the filesystem. Any change updates the node's `lastChanged`, pulses it,
   and prepends it to the **session timeline** (right panel).
 - **"You are here"** marks the most recently touched file.
 - **Click** a node → its path, line count, and its dependencies (imports / imported-by),
   each clickable to hop around.
 - **Search**, **domain filter** (click a legend row to hide/show), pan / zoom, drag to pin.
+- **Bilingual UI** — Chinese by default, `?lang=en` for English.
 
 ## How it's wired
 
 ```
 server.mjs   Node http server, no deps.
              - scan()      walk repo → nodes + import edges
+             - classify()  batched LLM pass → semantic domains (cached)
              - fs.watch    recursive watch → activity log + lastChanged
              - GET /api/state   the whole graph as JSON (frontend polls 1/s)
 public/index.html   self-contained canvas app: force layout, live highlight,
-                    timeline, detail popover.
+                    timeline, detail popover, i18n.
 ```
 
 The frontend polls `/api/state` every second, preserving node positions so the map
@@ -91,9 +102,9 @@ stays stable as files change.
 
 ## Extend it (the fun part)
 
-✅ **LLM semantic grouping** — done (see 语义分组 above). `classifyDomains()` in
-`server.mjs` reads file digests and names clusters by *responsibility* instead of by
-directory. This is what turns a file graph into a *system* map.
+✅ **LLM semantic grouping** — done (see above). `classifyDomains()` in `server.mjs`
+reads file digests and names clusters by *responsibility* instead of by directory.
+This is what turns a file graph into a *system* map.
 
 📐 **Conductor** — *design spec, not yet implemented.* See [`CONDUCTOR_SPEC.md`](CONDUCTOR_SPEC.md).
 Feed it a file of prompt phases and it drives a coding agent (Claude Code first, via the
@@ -116,3 +127,7 @@ Other natural next steps:
 
 Tuned for JS/TS import graphs today; other languages still get the file/domain map
 (edges are just sparser) — extend the import regex per language.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

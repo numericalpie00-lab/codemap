@@ -98,6 +98,7 @@ const LLM = {
   baseURL: (process.env.LLM_BASE_URL || '').replace(/\/$/, ''),
   openaiKey: process.env.OPENAI_API_KEY || process.env.LLM_API_KEY || '',
   model: process.env.CODEMAP_MODEL || '',
+  lang: process.env.CODEMAP_LANG === 'en' ? 'en' : 'zh', // domain-label language
 };
 function llmProvider() {
   if (LLM.baseURL) return 'openai';        // explicit endpoint wins (local models)
@@ -201,6 +202,23 @@ function extractJson(text) {
 }
 
 function buildPrompt(batch, knownDomains) {
+  const files = batch.map((d, i) => `【${i + 1}】\n${d.digest}`).join('\n\n');
+  if (LLM.lang === 'en') {
+    const system =
+      'You are a senior software architect. Below are digests of files in a codebase ' +
+      '(path + header comment + key symbols). Classify each file into an intuitive ' +
+      'business-domain name based on its CORE RESPONSIBILITY. Rules:\n' +
+      '1) Domain names in English, 1–3 words, describing WHAT it does (e.g. User Auth, ' +
+      'Canvas Rendering, Data Persistence, Routing, State Management, Styling, Build Config, ' +
+      'API Types, Tests, Docs, Utilities).\n' +
+      '2) Cluster by responsibility; files doing the same job MUST share a domain. Do not ' +
+      'group by folder, and do not give each file its own domain.\n' +
+      '3) Keep the total number of domains small (usually 5–12).\n' +
+      (knownDomains.length ? `4) Reuse these existing domain names where possible: ${knownDomains.join(', ')}.\n` : '') +
+      'Output ONLY a JSON object whose keys are file paths (exactly as given) and values are domain names. No explanation.';
+    const user = `File digests:\n\n${files}\n\nOutput JSON: {"path": "Domain", ...}`;
+    return { system, user };
+  }
   const system =
     '你是一位资深软件架构师。下面给出一个代码库里若干文件的摘要（路径 + 头部说明 + 主要符号）。' +
     '请依据每个文件的【核心职责】，把它归类到一个直观的【中文业务领域】名称。规则：\n' +
@@ -211,8 +229,7 @@ function buildPrompt(batch, knownDomains) {
     (knownDomains.length ? `4) 尽量复用这些已存在的领域名：${knownDomains.join('、')}。\n` : '') +
     '只输出一个 JSON 对象，键是文件路径（与输入完全一致），值是中文领域名。不要输出任何解释。';
   const user =
-    '文件摘要如下：\n\n' +
-    batch.map((d, i) => `【${i + 1}】\n${d.digest}`).join('\n\n') +
+    '文件摘要如下：\n\n' + files +
     '\n\n请输出 JSON：{"路径": "中文领域", ...}';
   return { system, user };
 }
