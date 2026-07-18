@@ -1,9 +1,11 @@
 {
   "name": "codemap",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "A live spatial map of your codebase — see the big picture and 'you are here' while vibe-coding.",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/numericalpie00-lab/codemap" },
+  "keywords": ["codebase", "visualization", "map", "force-directed", "ai-coding", "file-watcher"],
   "bin": { "codemap": "server.mjs" },
   "scripts": {
     "start": "node server.mjs"

@@ -1,5 +1,7 @@
 # 🗺 CodeMap
 
+![CodeMap — a codebase clustered into intuitive business-domain bubbles, with the file you just touched lit up](docs/codemap.png)
+
 A **live spatial map of your codebase** — so you stop getting lost in the linear scroll
 of AI-assisted coding. The big picture is always on screen, and when your AI tool
 (Claude Code, Cursor, anything) edits a file, the matching node **lights up** and lands
