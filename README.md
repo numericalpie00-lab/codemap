@@ -1,6 +1,6 @@
 # 🗺 CodeMap
 
-![CodeMap — a codebase clustered into intuitive business-domain bubbles, with the file you just touched lit up](docs/codemap.png)
+![CodeMap — a codebase clustered into intuitive business-domain bubbles, with the file you just touched lit up](docs/codemap-ddia-en.png)
 
 A **live spatial map of your codebase** — so you stop getting lost in the linear scroll
 of AI-assisted coding. The big picture is always on screen, and when your AI tool
@@ -8,6 +8,16 @@ of AI-assisted coding. The big picture is always on screen, and when your AI too
 on a **"you are here"** timeline.
 
 Built for the solo PM-engineer who vibe-codes and can't see the forest for the chat log.
+
+### More views
+
+CodeMap pointed at **its own repo** (5 files) — same UI, any size codebase:
+
+![CodeMap running on its own repo](docs/codemap-self-en.png)
+
+The UI is bilingual. Default is Chinese; append `?lang=en` for English. Same map, **中文版**:
+
+![CodeMap with Chinese domain labels](docs/codemap.png)
 
 ## Run it
 
@@ -19,6 +29,7 @@ node server.mjs /path/to/your/repo
 ```
 
 Options: `--port 7100`. If you omit the repo path it uses the current directory.
+The UI defaults to Chinese; open `http://localhost:7100/?lang=en` for English.
 
 Leave it open on a second monitor while you code. Edit a file → watch the node pulse.
 

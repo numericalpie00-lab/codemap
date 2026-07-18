@@ -77,16 +77,16 @@
       <div class="title">🗺 CodeMap<span class="dot" id="livedot"></span></div>
       <div class="sub" id="subtitle">loading…</div>
     </div>
-    <div class="hint">拖拽平移 · 滚轮缩放 · 点击气泡查看 · 拖动气泡钉住</div>
+    <div class="hint" id="hint">拖拽平移 · 滚轮缩放 · 点击气泡查看 · 拖动气泡钉住</div>
   </div>
   <aside class="side">
     <section class="search"><input id="q" placeholder="搜索文件…" autocomplete="off" /></section>
     <section style="display:flex;flex-direction:column;min-height:0;flex:1">
-      <h2>本次会话动过 · You are here</h2>
+      <h2 id="h2here">本次会话动过 · You are here</h2>
       <div class="timeline" id="timeline"></div>
     </section>
     <section>
-      <h2>业务领域 · Domains</h2>
+      <h2 id="h2domains">业务领域 · Domains</h2>
       <div class="legend" id="legend"></div>
     </section>
   </aside>
@@ -97,13 +97,40 @@
   <div class="fp" id="dFp"></div>
   <div class="meta" id="dMeta"></div>
   <div class="grp">
-    <div><h3>依赖 → imports</h3><ul id="dOut"></ul></div>
-    <div><h3>被依赖 ← imported by</h3><ul id="dIn"></ul></div>
+    <div><h3 id="h3out">依赖 → imports</h3><ul id="dOut"></ul></div>
+    <div><h3 id="h3in">被依赖 ← imported by</h3><ul id="dIn"></ul></div>
   </div>
 </div>
 
 <script>
 "use strict";
+// ---------- i18n (default zh; ?lang=en for English) ----------
+const LANG = new URLSearchParams(location.search).get('lang') === 'en' ? 'en' : 'zh';
+const T = {
+  zh: { hint: '拖拽平移 · 滚轮缩放 · 点击气泡查看 · 拖动气泡钉住', search: '搜索文件…',
+        here: '本次会话动过 · You are here', domains: '业务领域 · Domains',
+        imports: '依赖 → imports', importedBy: '被依赖 ← imported by',
+        emptyTl: '还没有改动。<br>用 Claude Code / 编辑器改一个文件，对应气泡会亮起，这里也会记一笔。',
+        semantic: '语义分组', classifying: '归类中…', folder: '文件夹分组',
+        youHere: '◆ 你在这里', loc: '行', changed: '改动', none: '—',
+        just: '刚刚', s: '秒前', m: '分前', h: '时前', d: '天前' },
+  en: { hint: 'drag to pan · scroll to zoom · click a bubble · drag to pin', search: 'Search files…',
+        here: 'Touched this session · You are here', domains: 'Domains',
+        imports: 'imports →', importedBy: '← imported by',
+        emptyTl: 'No changes yet.<br>Edit a file with Claude Code / your editor — its bubble lights up and lands here.',
+        semantic: 'semantic', classifying: 'classifying…', folder: 'by folder',
+        youHere: '◆ you are here', loc: 'lines', changed: 'changed', none: '—',
+        just: 'just now', s: 's ago', m: 'm ago', h: 'h ago', d: 'd ago' },
+}[LANG];
+document.documentElement.lang = LANG;
+(function applyStatic() {
+  document.getElementById('hint').textContent = T.hint;
+  document.getElementById('q').placeholder = T.search;
+  document.getElementById('h2here').textContent = T.here;
+  document.getElementById('h2domains').textContent = T.domains;
+  document.getElementById('h3out').textContent = T.imports;
+  document.getElementById('h3in').textContent = T.importedBy;
+})();
 const cv = document.getElementById('cv');
 const ctx = cv.getContext('2d');
 let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
@@ -145,7 +172,7 @@ async function poll() {
 let grouping = 'folder';
 function ingest(s) {
   grouping = s.grouping || 'folder';
-  const mode = grouping === 'llm' ? '语义分组' : (s.provider ? '归类中…' : '文件夹分组');
+  const mode = grouping === 'llm' ? T.semantic : (s.provider ? T.classifying : T.folder);
   document.getElementById('subtitle').textContent =
     `${s.repo}  ·  ${s.nodes.length} files · ${s.edges.length} deps · ${mode}`;
   // domains
@@ -335,7 +362,7 @@ function draw() {
     ctx.fillStyle = '#ffb454';
     ctx.font = `bold ${12 / view.s}px system-ui`;
     ctx.textAlign = 'center';
-    ctx.fillText('◆ 你在这里', latest.x, latest.y - radiusFor(latest) - 10 / view.s);
+    ctx.fillText(T.youHere, latest.x, latest.y - radiusFor(latest) - 10 / view.s);
   }
   ctx.restore();
   requestAnimationFrame(draw);
@@ -404,7 +431,7 @@ function selectNode(id) {
   const n = N.get(id);
   document.getElementById('dFp').textContent = n.id;
   const ago = n.lastChanged ? timeAgo(n.lastChanged) : '—';
-  document.getElementById('dMeta').textContent = `${n.domain}  ·  ${n.loc || 0} 行  ·  改动 ${ago}`;
+  document.getElementById('dMeta').textContent = `${n.domain}  ·  ${n.loc || 0} ${T.loc}  ·  ${T.changed} ${ago}`;
   const outs = E.filter(e => e.source === id).map(e => e.target);
   const ins = E.filter(e => e.target === id).map(e => e.source);
   fillList('dOut', outs); fillList('dIn', ins);
@@ -432,7 +459,7 @@ function focusOn(id) {
 function renderSidebar() {
   // timeline
   const tl = document.getElementById('timeline');
-  if (!activity.length) { tl.innerHTML = '<div class="tl-empty">还没有改动。<br>用 Claude Code / 编辑器改一个文件,对应气泡会亮起,这里也会记一笔。</div>'; }
+  if (!activity.length) { tl.innerHTML = `<div class="tl-empty">${T.emptyTl}</div>`; }
   else {
     tl.innerHTML = '';
     activity.forEach((a, i) => {
@@ -473,9 +500,9 @@ function base(p) { return p.split('/').pop(); }
 function esc(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
 function timeAgo(ts) {
   const s = Math.max(0, (now() - ts) / 1000);
-  if (s < 5) return '刚刚'; if (s < 60) return `${s | 0}秒前`;
-  if (s < 3600) return `${(s / 60) | 0}分前`; if (s < 86400) return `${(s / 3600) | 0}时前`;
-  return `${(s / 86400) | 0}天前`;
+  if (s < 5) return T.just; if (s < 60) return `${s | 0}${T.s}`;
+  if (s < 3600) return `${(s / 60) | 0}${T.m}`; if (s < 86400) return `${(s / 3600) | 0}${T.h}`;
+  return `${(s / 86400) | 0}${T.d}`;
 }
 
 poll();

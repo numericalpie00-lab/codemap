@@ -391,6 +391,10 @@ function scheduleRescan() {
 function markChange(abs, kind) {
   const ext = path.extname(abs).toLowerCase();
   if (!CODE_EXT.has(ext)) return;
+  const base = path.basename(abs);
+  // skip dotfiles (incl. our own .codemap-cache.json) — the scanner ignores
+  // them too, so they're never nodes and shouldn't clutter the timeline.
+  if (base.startsWith('.')) return;
   const parts = abs.split(path.sep);
   if (parts.some((p) => IGNORE_DIRS.has(p))) return;
   const id = rel(abs);
