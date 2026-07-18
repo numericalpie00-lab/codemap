@@ -84,6 +84,13 @@ stays stable as files change.
 `server.mjs` reads file digests and names clusters by *responsibility* instead of by
 directory. This is what turns a file graph into a *system* map.
 
+📐 **Conductor** — *design spec, not yet implemented.* See [`CONDUCTOR_SPEC.md`](CONDUCTOR_SPEC.md).
+Feed it a file of prompt phases and it drives a coding agent (Claude Code first, via the
+Agent SDK) through them one by one — with a **mandatory verification gate after every phase**,
+VS-Code-style **breakpoints**, an **emergency stop**, and an auto-pause whenever the agent
+needs a secret or a decision. You watch the whole run unfold on the map. The doc is the
+agreed blueprint (driver interface, pause state machine, cost model); the code is future work.
+
 Marked `// NEXT:` in `server.mjs`:
 
 1. **Git-aware changes** — on change, run `git diff --stat` for real lines-added/removed,
